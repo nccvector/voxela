@@ -11,6 +11,7 @@ use rayon::prelude::*;
 mod loader;
 mod octree;
 mod vec_ops;
+mod aabb;
 
 fn draw_octree(d: &mut RaylibMode3D<RaylibDrawHandle>, node: &OctreeNode) {
     // draw only if leaf node

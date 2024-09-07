@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use nalgebra::Vector3;
 
-use crate::octree::AABB;
+use crate::aabb::AABB;
 
 // Define the Mesh structure
 #[derive(Debug)]
