@@ -1,5 +1,4 @@
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::Ordering;
 use raylib::camera::Camera3D;
 use raylib::drawing::RaylibDraw;
 use raylib::init;
@@ -27,7 +26,7 @@ fn draw_octree(d: &mut RaylibMode3D<RaylibDrawHandle>, node: &OctreeNode) {
     match node.children {
         Some(ref children) => {
             for child in children.iter() {
-                draw_octree(d, child);
+                draw_octree(d, &child.lock().unwrap());
             }
         }
         None => {}
@@ -37,11 +36,11 @@ fn draw_octree(d: &mut RaylibMode3D<RaylibDrawHandle>, node: &OctreeNode) {
 fn main() {
     let model = loader::load().unwrap();
     let mesh = &model.meshes[0];
-    let mut root = Box::new(OctreeNode::new(mesh.aabb));
+    let mut root = Arc::new(Mutex::new(OctreeNode::new(mesh.aabb)));
 
-    for (i, index) in mesh.indices.iter().enumerate() {
-        root.insert(
-            i,
+    mesh.indices.par_iter().for_each(|index| {
+        root.lock().unwrap().insert(
+            0,
             &[
                 mesh.vertices[index[0] as usize],
                 mesh.vertices[index[1] as usize],
@@ -50,7 +49,7 @@ fn main() {
             4,
             0,
         )
-    }
+    });
 
     let WINDOW_WIDTH = 640;
     let WINDOW_HEIGHT = 480;
@@ -83,7 +82,7 @@ fn main() {
                 raylib::prelude::Vector2::new(32.0, 32.0),
                 raylib::prelude::Color::LIGHTGRAY,
             );
-            draw_octree(&mut d2, &root);
+            draw_octree(&mut d2, &root.lock().unwrap());
         }
     }
 }
