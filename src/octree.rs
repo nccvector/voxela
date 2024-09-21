@@ -1,9 +1,10 @@
 use std::sync::{Arc, Mutex};
-use nalgebra::{Vector3};
+use nalgebra::{center, Vector3};
+use rayon::prelude::*;
 use crate::aabb::{triangle_aabb_intersection, AABB};
+use crate::loader::Mesh;
 
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OctreeNode {
     pub aabb: AABB,
     pub children: Option<[Arc<Mutex<OctreeNode>>; 8]>,
@@ -11,9 +12,9 @@ pub struct OctreeNode {
 }
 
 impl OctreeNode {
-    pub fn new(bounding_box: AABB) -> Self {
+    pub fn new(aabb: AABB) -> Self {
         OctreeNode {
-            aabb: bounding_box,
+            aabb,
             children: None,
             faces: Vec::new(),
         }
@@ -23,7 +24,7 @@ impl OctreeNode {
     fn subdivide(&mut self) {
         let bounding_boxes = self.aabb.split();
 
-        let mut children = [
+        let children = [
             Arc::new(Mutex::new(OctreeNode::new(bounding_boxes[0].clone()))),
             Arc::new(Mutex::new(OctreeNode::new(bounding_boxes[1].clone()))),
             Arc::new(Mutex::new(OctreeNode::new(bounding_boxes[2].clone()))),
@@ -37,36 +38,83 @@ impl OctreeNode {
         self.children = Some(children);
     }
 
-
-    pub fn insert(&mut self, face_index: usize, vertices: &[Vector3<f32>; 3], max_depth: usize, depth: usize) {
-        // if depth > 3{
-        //     println!("depth: {}", depth > 2);
-        // }
-        if depth >= max_depth {
+    pub fn insert_face(&mut self, face_index: usize, &vertices: &[Vector3<f32>; 3]) {
+        if triangle_aabb_intersection(&vertices, &self.aabb) {
             self.faces.push(face_index);
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Octree {
+    pub root: Arc<Mutex<OctreeNode>>,
+    pub leaves: Vec<Arc<Mutex<OctreeNode>>>,
+}
+
+impl Octree {
+    pub fn new(mesh: &Mesh) -> Self {
+        let bmin = mesh.aabb.min.min().floor() - 1.0;
+        let mut bmax = mesh.aabb.max.max().ceil() + 1.0;
+        if (bmax - bmin) != 0.0 {
+            bmax += 1.0;
+        }
+
+        println!("Range: [{}, {}]", bmin, bmax);
+
+        let mut instance = Self {
+            root: Arc::new(Mutex::new(OctreeNode::new(AABB
+            {
+                min: Vector3::<f32>::new(bmin, bmin, bmin),
+                max: Vector3::<f32>::new(bmax, bmax, bmax),
+            }))),
+            leaves: Vec::new(),
+        };
+
+        instance.initialize(Arc::clone(&instance.root));
+
+        instance
+    }
+
+    fn initialize(&mut self, mut node: Arc<Mutex<OctreeNode>>) {
+        if node.lock().unwrap().aabb.size().min() <= 1.0 {
+            self.leaves.push(node);
             return;
         }
 
         // subdivide
-        if self.children.is_none() {
-            self.subdivide();
+        if node.lock().unwrap().children.is_none() {
+            node.lock().unwrap().subdivide();
         }
 
-        match self.children {
+        match node.lock().unwrap().children {
             None => {}
             Some(ref mut children) => {
-                for child in children {
-                    if triangle_aabb_intersection(&vertices, &child.lock().unwrap().aabb) {
-                        child.lock().unwrap().insert(face_index, vertices, max_depth, depth + 1);
-                    }
+                for child in children.iter_mut() {
+                    Octree::initialize(self, Arc::clone(child));
                 }
             }
         }
-
-        // for child in self.children.as_mut().unwrap().par_iter_mut() {
-        //     if triangle_aabb_intersection(&vertices, &child.aabb) {
-        //         child.insert(face_index, vertices, max_depth, depth + 1)
-        //     }
-        // }
     }
 }
+
+
+// match node.children {
+//     None => {}
+//     Some(ref mut children) => {
+//         for child in children.iter_mut() {
+//             if triangle_aabb_intersection(&vertices, &child.aabb) {
+//                 Octree::insert(self, Box::clone(child), face_index, vertices, max_depth, depth + 1);
+//             }
+//         }
+//     }
+// }
+
+
+
+
+
+
+
+
+
+

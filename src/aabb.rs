@@ -1,6 +1,43 @@
-use nalgebra::Vector3;
+use std::num::FpCategory::Infinite;
+use nalgebra::{min, Vector3};
 
 pub fn triangle_aabb_intersection(vertices: &[Vector3<f32>; 3], aabb: &AABB) -> bool {
+    let mut minX = f32::MAX;
+    let mut minY = f32::MAX;
+    let mut minZ = f32::MAX;
+    let mut maxX = -f32::MAX;
+    let mut maxY = -f32::MAX;
+    let mut maxZ = -f32::MAX;
+
+    for vertex in vertices {
+        if vertex.x < minX {
+            minX = vertex.x;
+        }
+        if vertex.y < minY {
+            minY = vertex.y;
+        }
+        if vertex.z < minZ {
+            minZ = vertex.z;
+        }
+
+        if vertex.x > maxX {
+            maxX = vertex.x;
+        }
+        if vertex.y > maxY {
+            maxY = vertex.y;
+        }
+        if vertex.z > maxZ {
+            maxZ = vertex.z;
+        }
+    }
+
+    if minX < aabb.min.x || minY < aabb.min.y || minZ < aabb.min.z {
+        return false;
+    }
+    if maxX > aabb.max.x || maxY > aabb.max.y || maxZ > aabb.max.z {
+        return false;
+    }
+
     let box_axes = [
         Vector3::<f32>::from([1.0, 0.0, 0.0]),
         Vector3::<f32>::from([0.0, 1.0, 0.0]),

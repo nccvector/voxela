@@ -1,11 +1,12 @@
 use std::fs::File;
 use std::io::{self, BufRead};
+use std::sync::{Arc, Mutex};
 use nalgebra::Vector3;
 
 use crate::aabb::AABB;
 
 // Define the Mesh structure
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Mesh {
     pub vertices: Vec<Vector3<f32>>,
     pub indices: Vec<Vector3<u32>>,
@@ -13,13 +14,13 @@ pub struct Mesh {
 }
 
 // Define the Model structure
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Model {
     pub meshes: Vec<Mesh>,
 }
 
 pub fn load() -> Result<Model, Box<dyn std::error::Error>> {
-    let scale: f32 = 100.0;
+    let scale: f32 = 50.0;
 
     // Open the file
     let file = File::open("assets/stanford-bunny.obj")?;
