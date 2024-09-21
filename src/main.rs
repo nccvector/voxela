@@ -2,10 +2,8 @@
 
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::thread::{sleep, ThreadId};
+use std::thread::{ThreadId};
 use std::time::Duration;
-use nalgebra::balancing::unbalance;
-use nalgebra::Vector3;
 use raylib::camera::Camera3D;
 use raylib::drawing::RaylibDraw;
 use raylib::init;
@@ -20,18 +18,33 @@ mod octree;
 mod vec_ops;
 mod aabb;
 
-fn draw_octree(d: &mut RaylibMode3D<RaylibDrawHandle>, octree: &Octree) {
-    for leaf in octree.leaves.clone() {
-        let l = leaf.lock().unwrap();
-        // draw only if leaf node
-        if !l.faces.is_empty() {
-            let size = l.aabb.size();
-            d.draw_cube(
-                raylib::prelude::Vector3::new(l.aabb.min.x, l.aabb.min.y, l.aabb.min.z),
-                size.x, size.y, size.z,
-                raylib::prelude::Color::new(0, 0, 255, 255),
-            );
+fn draw_octree(d: &mut RaylibMode3D<RaylibDrawHandle>, node: Arc<Mutex<OctreeNode>>) {
+    let l = node.lock().unwrap();
+    let size = l.aabb.size();
+
+    // draw only if leaf node
+    if !l.faces.is_empty() {
+        d.draw_cube(
+            raylib::prelude::Vector3::new(l.aabb.min.x, l.aabb.min.y, l.aabb.min.z),
+            size.x, size.y, size.z,
+            raylib::prelude::Color::new(0, 0, 255, 255),
+        );
+    } else {
+        let epsilon = 0.001;
+        d.draw_cube_wires(
+            raylib::prelude::Vector3::new(l.aabb.min.x, l.aabb.min.y, l.aabb.min.z),
+            size.x + epsilon, size.y + epsilon, size.z + epsilon,
+            raylib::prelude::Color::new(0, 0, 0, 255),
+        );
+    }
+
+    match l.children.clone() {
+        Some(children) => {
+            for child in children {
+                draw_octree(d, child);
+            }
         }
+        _ => {}
     }
 }
 
@@ -44,7 +57,21 @@ struct ThreadDump {
 
 fn main() {
     let model = loader::load().unwrap();
-    let mesh = Arc::from(model.meshes[0].clone());
+    let mesh = Arc::new(model.meshes[0].clone());
+
+    // Construct a vec of aabbs for each face
+    let mut aabbList = vec![];
+    for index in mesh.indices.clone().iter() {
+        aabbList.push(
+            AABB::from(&[
+                mesh.vertices[index[0] as usize],
+                mesh.vertices[index[1] as usize],
+                mesh.vertices[index[2] as usize],
+            ])
+        );
+    }
+    let aabbListPtr: Arc<Vec<AABB>> = Arc::new(aabbList);
+
     let mut octree = Octree::new(&mesh);
     println!("Total leaves: {}", octree.leaves.len());
 
@@ -73,6 +100,8 @@ fn main() {
             leaves.push(leafPtr);
         }
         let mesh = Arc::clone(&mesh);
+        let aabbListPtr = Arc::clone(&aabbListPtr);
+
         let threadDump = Arc::clone(&threadDumps[i]);
 
         let handle = thread::spawn(move || {
@@ -85,14 +114,15 @@ fn main() {
 
             for t in 0..leaves.iter().len() {
                 // println!("{:?}", thread::current().id());
-                for index in mesh.indices.iter() {
+                for (faceIndex, index) in mesh.indices.iter().enumerate() {
                     leaves[t].lock().unwrap().insert_face(
-                        index[0] as usize,
+                        faceIndex,
                         &[
                             mesh.vertices[index[0] as usize],
                             mesh.vertices[index[1] as usize],
                             mesh.vertices[index[2] as usize],
                         ],
+                        &aabbListPtr[faceIndex],
                     )
                 }
 
@@ -131,6 +161,10 @@ fn main() {
         handle.join();
     }
 
+    // Delete nodes leading to empty leaves
+    octree.prune();
+
+    // RAY LIB DEBUG VIEWER
     let WINDOW_WIDTH = 1280;
     let WINDOW_HEIGHT = 720;
     let (mut rl, thread) = init()
@@ -146,7 +180,7 @@ fn main() {
     );
 
     rl.set_target_fps(60);
-    camera.position = raylib::prelude::Vector3::new(40.0, 4.0, 4.0);
+    camera.position = raylib::prelude::Vector3::new(40.0, 4.0, 20.0);
 
     while !rl.window_should_close() {
         rl.update_camera(&mut camera, CameraMode::CAMERA_ORBITAL);
@@ -162,7 +196,7 @@ fn main() {
                 raylib::prelude::Vector2::new(32.0, 32.0),
                 raylib::prelude::Color::LIGHTGRAY,
             );
-            draw_octree(&mut d2, &octree);
+            draw_octree(&mut d2, Arc::clone(&octree.root));
         }
     }
 }

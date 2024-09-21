@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::{self, BufRead};
-use std::sync::{Arc, Mutex};
 use nalgebra::Vector3;
 
 use crate::aabb::AABB;
@@ -20,7 +19,7 @@ pub struct Model {
 }
 
 pub fn load() -> Result<Model, Box<dyn std::error::Error>> {
-    let scale: f32 = 50.0;
+    let scale: f32 = 40.0;
 
     // Open the file
     let file = File::open("assets/stanford-bunny.obj")?;

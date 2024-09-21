@@ -1,40 +1,7 @@
-use std::num::FpCategory::Infinite;
-use nalgebra::{min, Vector3};
+use nalgebra::{Vector3};
 
-pub fn triangle_aabb_intersection(vertices: &[Vector3<f32>; 3], aabb: &AABB) -> bool {
-    let mut minX = f32::MAX;
-    let mut minY = f32::MAX;
-    let mut minZ = f32::MAX;
-    let mut maxX = -f32::MAX;
-    let mut maxY = -f32::MAX;
-    let mut maxZ = -f32::MAX;
-
-    for vertex in vertices {
-        if vertex.x < minX {
-            minX = vertex.x;
-        }
-        if vertex.y < minY {
-            minY = vertex.y;
-        }
-        if vertex.z < minZ {
-            minZ = vertex.z;
-        }
-
-        if vertex.x > maxX {
-            maxX = vertex.x;
-        }
-        if vertex.y > maxY {
-            maxY = vertex.y;
-        }
-        if vertex.z > maxZ {
-            maxZ = vertex.z;
-        }
-    }
-
-    if minX < aabb.min.x || minY < aabb.min.y || minZ < aabb.min.z {
-        return false;
-    }
-    if maxX > aabb.max.x || maxY > aabb.max.y || maxZ > aabb.max.z {
+pub fn triangle_aabb_intersection(vertices: &[Vector3<f32>; 3], faceAABB: &AABB, aabb: &AABB) -> bool {
+    if !faceAABB.overlap(aabb) {
         return false;
     }
 
@@ -132,6 +99,28 @@ pub struct AABB {
 impl AABB {
     pub fn new(min: Vector3<f32>, max: Vector3<f32>) -> Self {
         AABB { min, max }
+    }
+
+    pub fn from(vertices: &[Vector3<f32>; 3]) -> AABB {
+        // Initialize min and max with the first vertex
+        let mut min = vertices[0];
+        let mut max = vertices[0];
+
+        // Iterate over the vertices to find the min and max coordinates
+        for vertex in vertices.iter() {
+            min = min.inf(&vertex); // Component-wise minimum
+            max = max.sup(&vertex); // Component-wise maximum
+        }
+
+        AABB { min, max }
+    }
+
+    pub fn overlap(&self, other: &AABB) -> bool {
+        !(
+            self.max.x < other.min.x || self.min.x > other.max.x ||
+                self.max.y < other.min.y || self.min.y > other.max.y ||
+                self.max.z < other.min.z || self.min.z > other.max.z
+        )
     }
 
     pub fn center(&self) -> Vector3<f32> {

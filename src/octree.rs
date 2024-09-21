@@ -38,8 +38,8 @@ impl OctreeNode {
         self.children = Some(children);
     }
 
-    pub fn insert_face(&mut self, face_index: usize, &vertices: &[Vector3<f32>; 3]) {
-        if triangle_aabb_intersection(&vertices, &self.aabb) {
+    pub fn insert_face(&mut self, face_index: usize, &vertices: &[Vector3<f32>; 3], faceAABB: &AABB) {
+        if triangle_aabb_intersection(&vertices, faceAABB, &self.aabb) {
             self.faces.push(face_index);
         }
     }
@@ -93,6 +93,34 @@ impl Octree {
                     Octree::initialize(self, Arc::clone(child));
                 }
             }
+        }
+    }
+
+    pub fn prune(&mut self) {
+        Octree::_prune(Arc::clone(&self.root));
+    }
+
+    fn _prune(node: Arc<Mutex<OctreeNode>>) -> bool {
+        let mut n = node.lock().unwrap();
+
+        if n.children.is_none() {
+            return n.faces.len() == 0;
+        }
+
+        match &n.children {
+            Some(children) => {
+                let mut p = false;
+                for child in children {
+                    p = p || Octree::_prune(Arc::clone(child));
+                }
+
+                if p {
+                    n.children = None;
+                }
+
+                p
+            }
+            _ => { true }
         }
     }
 }
